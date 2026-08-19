@@ -32,7 +32,7 @@ db.exec(`
 
     CREATE TABLE IF NOT EXISTS users (
         username TEXT PRIMARY KEY,
-        balance INTEGER NOT NULL DEFAULT 0,
+        balance REAL NOT NULL DEFAULT 0,
         playeruuid TEXT
     );
 
@@ -40,6 +40,12 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_items_seller ON items(seller);
     CREATE INDEX IF NOT EXISTS idx_history_buyer ON history(buyer);
 `);
+
+export const mutationVersion = { value: 0 };
+export const bumpVersion = () => {
+    mutationVersion.value += 1;
+};
+export const getVersion = () => mutationVersion.value;
 
 const run = (text: string, params: unknown[] = []) => {
     const stmt = db.query(text);

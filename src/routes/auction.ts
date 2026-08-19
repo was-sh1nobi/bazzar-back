@@ -1,5 +1,5 @@
 import {FastifyInstance} from "fastify";
-import {pool} from "../db";
+import {pool, bumpVersion} from "../db";
 import {registerIfAbsent} from "../utils/registerIfAbsent";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -29,6 +29,7 @@ export default async function auctionRoute(app: FastifyInstance) {
                  VALUES ($1,$2,$3,$4,$5,$6,'AVAILABLE') RETURNING id`,
                 [playerName.trim(), material.trim(), amt, p, "player", "player"]
             );
+            bumpVersion();
             return res.code(200).send({success: true, message: `item created with id : ${stmt.rows[0].id}`});
         } catch (error) {
             console.error(error);

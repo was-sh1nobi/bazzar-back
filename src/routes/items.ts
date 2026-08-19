@@ -1,29 +1,18 @@
 import Fastify, {FastifyInstance} from "fastify";
-import {pool} from "../db";
+import {pool, bumpVersion} from "../db";
 import {ItemsAddBody} from "../types/items/items";
 import {registerIfAbsent} from "../utils/registerIfAbsent";
 import {getItems, getBySeller, getByBuyer, getHistory} from "../services/items/items";
+import {getBalance, changeBalance} from "../services/balance/balance";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const envelope = (data: {
-    items: unknown[];
-    page: number;
-    pageSize: number;
-    total: number;
-    totalPages: number;
-}) => ({
-    page: data.page,
-    pageSize: data.pageSize,
-    total: data.total,
-    totalPages: data.totalPages,
-    items: data.items,
-});
 
 interface ListQuery {
     page?: number;
     pageSize?: number;
     player?: string;
+    since?: number;
+    timeout?: number;
 }
 
 const parsePage = (raw: unknown, fallback: number) => {
@@ -36,12 +25,32 @@ const materialRe = /^[A-Z0-9_]+$/;
 const fail = (res: {code: (c: number) => {send: (b: unknown) => unknown}}, code: number, message: string) =>
     res.code(code).send({success: false, message});
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 export default async function itemsRoute(app: FastifyInstance) {
     app.get<{Querystring: ListQuery}>('/', async (req, res) => {
         const page = parsePage(req.query.page, 0);
         const pageSize = parsePage(req.query.pageSize, 45);
-        const data = await getItems(page, pageSize);
-        res.code(200).send(envelope(data));
+        const player = req.query.player && UUID_RE.test(req.query.player) ? req.query.player : undefined;
+        const data = await getItems(page, pageSize, player);
+        res.code(200).send(data);
+    });
+
+    app.get<{Querystring: ListQuery}>('/poll', async (req, res) => {
+        const page = parsePage(req.query.page, 0);
+        const pageSize = parsePage(req.query.pageSize, 45);
+        const player = req.query.player && UUID_RE.test(req.query.player) ? req.query.player : undefined;
+        const since = Number(req.query.since) || 0;
+        const timeoutMs = Math.min(Math.max(Number(req.query.timeout) || 25, 1), 60) * 1000;
+
+        const deadline = Date.now() + timeoutMs;
+        let data;
+        for (;;) {
+            data = await getItems(page, pageSize, player);
+            if (data.version > since || Date.now() >= deadline) break;
+            await sleep(500);
+        }
+        res.code(200).send(data);
     });
 
     app.get<{Querystring: ListQuery}>('/active', async (req, res) => {
@@ -50,7 +59,7 @@ export default async function itemsRoute(app: FastifyInstance) {
         const page = parsePage(req.query.page, 0);
         const pageSize = parsePage(req.query.pageSize, 45);
         const data = await getBySeller(player, page, pageSize);
-        res.code(200).send(envelope(data));
+        res.code(200).send(data);
     });
 
     app.get<{Querystring: ListQuery}>('/bought', async (req, res) => {
@@ -59,7 +68,7 @@ export default async function itemsRoute(app: FastifyInstance) {
         const page = parsePage(req.query.page, 0);
         const pageSize = parsePage(req.query.pageSize, 45);
         const data = await getByBuyer(player, page, pageSize);
-        res.code(200).send(envelope(data));
+        res.code(200).send(data);
     });
 
     app.get<{Querystring: ListQuery}>('/history', async (req, res) => {
@@ -68,7 +77,7 @@ export default async function itemsRoute(app: FastifyInstance) {
         const page = parsePage(req.query.page, 0);
         const pageSize = parsePage(req.query.pageSize, 45);
         const data = await getHistory(player, page, pageSize);
-        res.code(200).send(envelope(data));
+        res.code(200).send(data);
     });
 
     app.post<{Body: ItemsAddBody}>('/add', async (req, res) => {
@@ -86,6 +95,7 @@ export default async function itemsRoute(app: FastifyInstance) {
                  VALUES ($1,$2,$3,$4,$5,$6,'AVAILABLE') RETURNING id`,
                 [playerName.trim(), material.trim(), amount, price, source, origin]
             );
+            bumpVersion();
             return res.code(200).send({success: true, message: `item created with id : ${stmt.rows[0].id}`});
         } catch (error) {
             console.error(error);
@@ -98,8 +108,38 @@ export default async function itemsRoute(app: FastifyInstance) {
         if (!Number.isFinite(Number(wantedId))) return fail(res, 400, "invalid wantedId");
         if (!buyerId || !UUID_RE.test(buyerId)) return fail(res, 400, "malformed buyer UUID");
 
-        const client = await pool.connect();
+        const item = await pool.query(`SELECT * FROM items WHERE id = $1`, [wantedId]);
+        if (item.rows.length === 0) return fail(res, 404, "item not found");
 
+        const listing = item.rows[0] as {
+            id: number;
+            seller: string;
+            material: string;
+            amount: number;
+            price: string;
+            source: string;
+            origin: string;
+            status: string;
+        };
+
+        if (listing.status !== 'AVAILABLE') {
+            if (listing.status === 'PENDING') return fail(res, 400, "item is processing for someone else");
+            return fail(res, 400, "item sold out");
+        }
+
+        const ownerUuid = (pool.query(
+            `SELECT playeruuid FROM users WHERE username = $1 LIMIT 1`, [listing.seller]
+        ).rows[0] as {playeruuid?: string} | undefined)?.playeruuid;
+
+        if (ownerUuid && ownerUuid === buyerId) {
+            return fail(res, 400, "you cannot buy your own listing");
+        }
+
+        const cost = Number(listing.price) * listing.amount;
+        const buyerBalance = await getBalance(buyerId);
+        if (buyerBalance < cost) return fail(res, 400, "insufficient funds");
+
+        const client = await pool.connect();
         try {
             await client.query('BEGIN');
 
@@ -109,36 +149,40 @@ export default async function itemsRoute(app: FastifyInstance) {
                  RETURNING *`,
                 [wantedId]
             );
-
             if (data.rows.length === 0) {
-                const check = await client.query(`SELECT status FROM items WHERE id = $1`, [wantedId]);
-
-                if (check.rows.length === 0) {
-                    await client.query('ROLLBACK');
-                    return fail(res, 404, "item not found");
-                }
-
-                const status = check.rows[0].status;
                 await client.query('ROLLBACK');
-
-                if (status === "PENDING") return fail(res, 400, "item is processing for someone else");
-                if (status === "SOLD") return fail(res, 400, "item sold out");
+                return fail(res, 400, "item sold out");
             }
 
-            const item = data.rows[0];
+            const current = data.rows[0] as typeof listing;
+            if (current.seller === listing.seller && ownerUuid && ownerUuid === buyerId) {
+                await client.query('ROLLBACK');
+                return fail(res, 400, "you cannot buy your own listing");
+            }
 
             await client.query("UPDATE items SET status = 'SOLD' WHERE id = $1", [wantedId]);
 
             const response = await client.query(
                 `INSERT INTO history (seller, buyer, material, price, amount, source, origin)
                  VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-                [item.seller, buyerId, item.material, item.price, item.amount, item.source, item.origin]
+                [listing.seller, buyerId, listing.material, listing.price, listing.amount, listing.source, listing.origin]
             );
 
             await client.query('COMMIT');
 
+            const newBalance = await changeBalance(buyerId, -cost);
+            if (ownerUuid) {
+                try {
+                    await changeBalance(ownerUuid, cost);
+                } catch (e) {
+                    // seller credit best-effort
+                }
+            }
+            bumpVersion();
+
             return res.code(200).send({
                 success: true,
+                balance: newBalance,
                 message: `item added with id : ${response.rows[0].id}`,
             });
         } catch (e) {
@@ -148,5 +192,40 @@ export default async function itemsRoute(app: FastifyInstance) {
         } finally {
             client.release();
         }
+    });
+
+    app.post<{Body: {wantedId?: number; sellerId?: string}}>('/retrieve', async (req, res) => {
+        const {wantedId, sellerId} = req.body;
+        if (!Number.isFinite(Number(wantedId))) return fail(res, 400, "invalid wantedId");
+        if (!sellerId || !UUID_RE.test(sellerId)) return fail(res, 400, "malformed seller UUID");
+
+        const item = await pool.query(`SELECT * FROM items WHERE id = $1`, [wantedId]);
+        if (item.rows.length === 0) return fail(res, 404, "item not found");
+
+        const listing = item.rows[0] as {
+            id: number;
+            seller: string;
+            material: string;
+            amount: number;
+            price: string;
+            status: string;
+        };
+
+        if (listing.status !== 'AVAILABLE') return fail(res, 400, "item is not available to retrieve");
+
+        const ownerUuid = (pool.query(
+            `SELECT playeruuid FROM users WHERE username = $1 LIMIT 1`, [listing.seller]
+        ).rows[0] as {playeruuid?: string} | undefined)?.playeruuid;
+
+        if (!ownerUuid || ownerUuid !== sellerId) return fail(res, 400, "you can only retrieve your own listings");
+
+        pool.query(`UPDATE items SET status = 'REMOVED' WHERE id = $1`, [wantedId]);
+        bumpVersion();
+        return res.code(200).send({
+            success: true,
+            material: listing.material,
+            amount: listing.amount,
+            message: `item ${wantedId} retrieved`,
+        });
     });
 }

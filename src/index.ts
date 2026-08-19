@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import itemsRoute from "./routes/items";
 import auctionRoute from "./routes/auction";
+import balanceRoute from "./routes/balance";
 import {getStats} from "./services/items/items";
 
 
@@ -18,6 +19,7 @@ app.get<{Querystring: {player?: string}}>('/stats', async (req, res) => {
 
 app.register(itemsRoute , {prefix : "/items"});
 app.register(auctionRoute);
+app.register(balanceRoute , {prefix : "/balance"});
 
 const start = async () => {
     try {
