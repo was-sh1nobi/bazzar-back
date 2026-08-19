@@ -1,0 +1,13 @@
+{
+  "scripts": {
+    "dev" : "bun run --watch src/index.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.11.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.9",
+    "typescript": "^7.0.2"
+  }
+}
