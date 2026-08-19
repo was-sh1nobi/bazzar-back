@@ -2,6 +2,7 @@ import {describe, expect, it, beforeAll, afterAll} from "bun:test";
 import Fastify from "fastify";
 import itemsRoute from "../src/routes/items";
 import auctionRoute from "../src/routes/auction";
+import balanceRoute from "../src/routes/balance";
 
 let app: ReturnType<typeof Fastify>;
 let db: string;
@@ -12,6 +13,7 @@ beforeAll(async () => {
     app = Fastify();
     app.register(itemsRoute, {prefix: "/items"});
     app.register(auctionRoute); // mounts POST /list at root, mirroring index.ts
+    app.register(balanceRoute, {prefix: "/balance"}); // server-side money
     await app.ready();
 });
 
@@ -54,7 +56,7 @@ describe("auction API", () => {
         expect(JSON.parse(res.body).total).toBeGreaterThan(0);
     });
 
-    it("buys the item and records it in bought/history", async () => {
+    it("rejects buying your own listing", async () => {
         const feed = await app.inject({method: "GET", url: "/items?page=0&pageSize=45"});
         const id = JSON.parse(feed.body).items[0].id;
 
@@ -63,15 +65,39 @@ describe("auction API", () => {
             url: "/items/buy",
             payload: {wantedId: id, buyerId: "069a79f4-44e9-4726-a5be-fca90e38aaf5"},
         });
+        expect(buy.statusCode).toBe(400);
+        expect(JSON.parse(buy.body).success).toBe(false);
+        expect(JSON.parse(buy.body).message).toBe("you cannot buy your own listing");
+    });
+
+    it("buys the item and records it in bought/history", async () => {
+        const alex = "11111111-2222-3333-4444-555555555555";
+        await app.inject({
+            method: "POST",
+            url: "/balance/change",
+            payload: {playerUuid: alex, playerName: "Alex", delta: 10000},
+        });
+
+        const feed = await app.inject({method: "GET", url: "/items?page=0&pageSize=45"});
+        const id = JSON.parse(feed.body).items[0].id;
+
+        const buy = await app.inject({
+            method: "POST",
+            url: "/items/buy",
+            payload: {wantedId: id, buyerId: alex},
+        });
         expect(buy.statusCode).toBe(200);
         expect(JSON.parse(buy.body).success).toBe(true);
 
-        const bought = await app.inject({method: "GET", url: "/items/bought?player=069a79f4-44e9-4726-a5be-fca90e38aaf5"});
+        const bought = await app.inject({method: "GET", url: "/items/bought?player=" + alex});
         expect(JSON.parse(bought.body).total).toBeGreaterThan(0);
+
+        const history = await app.inject({method: "GET", url: "/items/history?player=" + alex});
+        expect(JSON.parse(history.body).total).toBeGreaterThan(0);
     });
 
     it("returns 404 for buying a missing item", async () => {
-        const buy = await app.inject({method: "POST", url: "/items/buy", payload: {wantedId: 999999, buyerId: "069a79f4-44e9-4726-a5be-fca90e38aaf5"}});
+        const buy = await app.inject({method: "POST", url: "/items/buy", payload: {wantedId: 999999, buyerId: "11111111-2222-3333-4444-555555555555"}});
         expect(buy.statusCode).toBe(404);
     });
 });
