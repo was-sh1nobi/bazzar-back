@@ -12,6 +12,8 @@ INSTANCE="$(systemd-escape --suffix=service bazzar)"
 install -d "$APP_DIR"
 cp -r /tmp/bazzar-src/* "$APP_DIR/"
 cd "$APP_DIR"
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
 bun install --frozen-lockfile
 
 systemctl --user daemon-reload
