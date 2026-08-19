@@ -1,0 +1,5 @@
+node_modules/
+bazzar.db
+bazzar.db-shm
+bazzar.db-wal
+.env

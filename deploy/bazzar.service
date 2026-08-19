@@ -1,0 +1,14 @@
+[Unit]
+Description=Bazzar Auction House backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/bazzar-back
+EnvironmentFile=%h/bazzar-back/.env
+ExecStart=/usr/bin/env bun run src/index.ts
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
