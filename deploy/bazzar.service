@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/bazzar-back
-EnvironmentFile=%h/bazzar-back/.env
+WorkingDirectory=/var/www/bazzar
+EnvironmentFile=/var/www/bazzar/.env
 ExecStart=/usr/bin/env bun run src/index.ts
 Restart=on-failure
 RestartSec=3

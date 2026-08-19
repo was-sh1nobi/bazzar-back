@@ -62,7 +62,7 @@ jobs:
 
           echo "== [3/4] uploading sources to /tmp/bazzar-src"
           scp -P "${SSH_PORT:-22}" -r \
-            package.json bun.lock .env.example src test \
+            package.json bun.lock .env.example src test deploy \
             "${SSH_USER}@${SSH_HOST}:/tmp/bazzar-src" 2>>"$LOG"
 
           echo "== [4/4] running remote deploy script"
