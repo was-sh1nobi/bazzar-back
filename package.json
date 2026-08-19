@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "dev" : "bun run --watch src/index.ts"
+    "dev" : "bun run --watch src/index.ts",
+    "test" : "bun test"
   },
   "dependencies": {
     "fastify": "^5.11.2"
