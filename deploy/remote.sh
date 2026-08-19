@@ -24,19 +24,38 @@ cp -r /tmp/bazzar-src/. "$APP_DIR/"
 
 cd "$APP_DIR"
 export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
+if [ -x "$BUN_INSTALL/bin/bun" ]; then
+    export PATH="$BUN_INSTALL/bin:$PATH"
+else
+    command -v bun >/dev/null || { echo "::error::bun not found on $SSH_USER@$SSH_HOST"; exit 1; }
+fi
 bun install --frozen-lockfile
 
-# Install/update the systemd user unit from the repo so the service exists.
+# --- Create and enable the systemd user unit, remotely and automatically. ---
+
+# 1) Make sure the user manager is actually running so systemctl --user works.
+if ! systemctl --user is-system-running >/dev/null 2>&1; then
+    systemctl enable --now systemd-user --no-pager >/dev/null 2>&1 \
+        || loginctl enable-linger "${USER:-$(id -un)}" \
+        || true   # real failure surfaces at the restart below
+fi
+
+# 2) Install the unit file from the repo.
 mkdir -p "$UNIT_DIR"
 cp /tmp/bazzar-src/deploy/bazzar.service "$UNIT_DIR/$INSTANCE"
 
 systemctl --user daemon-reload
-systemctl --user enable --now "$INSTANCE" >/dev/null 2>&1 || true
+
+# 3) Enable (persist), then start/restart.
+systemctl --user enable "$INSTANCE" >/dev/null 2>&1 || true
 systemctl --user restart "$INSTANCE"
+
+# 4) Verify, or dump the journal so the failure is visible.
 systemctl --user is-active "$INSTANCE" >/dev/null || {
-    journalctl --user -u "$INSTANCE" -n 30 --no-pager >&2
+    echo "::error::bazzar.service failed to start"
+    journalctl --user -u "$INSTANCE" -n 30 --no-pager >&2 || true
     exit 1
 }
+
 rm -rf /tmp/bazzar-src
 echo "deployed to $APP_DIR: $(systemctl --user show "$INSTANCE" --property=ActiveState --value)"
