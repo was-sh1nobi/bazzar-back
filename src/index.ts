@@ -3,6 +3,7 @@ import itemsRoute from "./routes/items";
 import auctionRoute from "./routes/auction";
 import balanceRoute from "./routes/balance";
 import authRoute from "./routes/auth";
+import shopRoute from "./routes/shop";
 import {getStats} from "./services/items/items";
 
 
@@ -22,6 +23,7 @@ app.register(itemsRoute , {prefix : "/items"});
 app.register(auctionRoute);
 app.register(balanceRoute , {prefix : "/balance"});
 app.register(authRoute , {prefix : "/auth"});
+app.register(shopRoute , {prefix : "/shop"});
 
 const start = async () => {
     try {
