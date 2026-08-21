@@ -4,6 +4,7 @@ import {ItemsAddBody} from "../types/items/items";
 import {registerIfAbsent} from "../utils/registerIfAbsent";
 import {getItems, getBySeller, getByBuyer, getHistory} from "../services/items/items";
 import {getBalance, changeBalance} from "../services/balance/balance";
+import {isBlocked, normalizeOrigin, normalizeSource} from "../utils/provenance";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -89,11 +90,18 @@ export default async function itemsRoute(app: FastifyInstance) {
         const amt = Number(amount.trim());
         if (!Number.isFinite(amt) || amt <= 0 || amt > 64) return fail(res, 400, "invalid amount of item");
 
+        // ---- Provenance double-check ----
+        const src = normalizeSource(source);
+        const org = normalizeOrigin(origin);
+        if (isBlocked(src, org)) {
+            return fail(res, 400, `blocked origin: ${org} (source=${src}) cannot enter economy`);
+        }
+
         try {
             const stmt = await pool.query(
                 `INSERT INTO items (seller, material, amount, price, source, origin, status)
                  VALUES ($1,$2,$3,$4,$5,$6,'AVAILABLE') RETURNING id`,
-                [playerName.trim(), material.trim(), amount, price, source, origin]
+                [playerName.trim(), material.trim(), amount, price, src, org]
             );
             bumpVersion();
             return res.code(200).send({success: true, message: `item created with id : ${stmt.rows[0].id}`});

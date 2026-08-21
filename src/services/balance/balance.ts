@@ -8,10 +8,9 @@ const resolveUuid = async (playerUuid: string): Promise<string | null> => {
 export const registerIfAbsentByUuid = async (playerUuid: string, username?: string) => {
     const name = (username ?? playerUuid).trim();
     pool.query(
-        `INSERT INTO users (username, balance, playeruuid)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (username) DO UPDATE SET playeruuid = excluded.playeruuid;`,
-        [name, 0, playerUuid]
+        `INSERT INTO users (playeruuid, username, balance) VALUES ($1,$2,0)
+         ON CONFLICT(playeruuid) DO UPDATE SET username = excluded.username`,
+        [playerUuid, name]
     );
 };
 
@@ -39,8 +38,10 @@ export const changeBalance = async (playerUuid: string, delta: number): Promise<
 };
 
 export const creditIfRegistered = async (sellerName: string, amount: number) => {
+    // Prefer UUID lookup via history; fallback to username
     const res = pool.query(`SELECT playeruuid FROM users WHERE username = $1 LIMIT 1`, [sellerName]);
     if (res.rows.length === 0) return;
     const sellerUuid = res.rows[0].playeruuid;
+    if (!sellerUuid) return;
     await changeBalance(sellerUuid, amount);
 };

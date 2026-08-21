@@ -3,10 +3,9 @@ import { pool } from "../db";
 export const registerIfAbsent = async (username: string, playeruuid: string) => {
     try {
         pool.query(
-            `INSERT INTO users (username, balance, playeruuid)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (username) DO NOTHING;`,
-            [username, 0, playeruuid]
+            `INSERT INTO users (playeruuid, username, balance) VALUES ($1,$2,0)
+             ON CONFLICT(playeruuid) DO UPDATE SET username = excluded.username;`,
+            [playeruuid, username]
         );
     } catch (error) {
         console.error("[registerIfAbsent error]", error);

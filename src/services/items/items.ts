@@ -17,11 +17,14 @@ const envelopeData = (rows: unknown[], total: number, page: number, pageSize: nu
 export const getItems = async (page: number, pageSize: number, excludePlayer?: string) => {
     const offset = page * pageSize;
 
+    // Defense in depth: block tainted origins even if plugin check was bypassed
+    const provenanceFilter = `AND LOWER(COALESCE(source,'player')) NOT IN ('creative','admin','command') AND LOWER(COALESCE(origin,'survival')) NOT IN ('creative','command','unknown')`;
+
     const where = excludePlayer
-        ? `status = 'AVAILABLE' AND source NOT IN ('creative', 'admin')
+        ? `status = 'AVAILABLE' ${provenanceFilter}
            AND seller NOT IN (SELECT username FROM users WHERE playeruuid = $1)
            AND seller <> $1`
-        : `status = 'AVAILABLE' AND source NOT IN ('creative', 'admin')`;
+        : `status = 'AVAILABLE' ${provenanceFilter}`;
 
     const [data, countResult] = await Promise.all([
         pool.query(
@@ -107,9 +110,10 @@ export const getHistory = async (player: string, page: number, pageSize: number)
 };
 
 export const getStats = async (player: string) => {
+    const filteredAvailable = `status = 'AVAILABLE' AND LOWER(COALESCE(source,'player')) NOT IN ('creative','admin','command') AND LOWER(COALESCE(origin,'survival')) NOT IN ('creative','command','unknown')`;
     const [totalListings, activeListings, totalSold, myListings, mySold, myPurchases] = await Promise.all([
         pool.query(`SELECT COUNT(*) AS count FROM items`),
-        pool.query(`SELECT COUNT(*) AS count FROM items WHERE status = 'AVAILABLE'`),
+        pool.query(`SELECT COUNT(*) AS count FROM items WHERE ${filteredAvailable}`),
         pool.query(`SELECT COUNT(*) AS count FROM history`),
         pool.query(`SELECT COUNT(*) AS count FROM items WHERE ${sellerClause}`, [player]),
         pool.query(`SELECT COUNT(*) AS count FROM history WHERE ${sellerClause}`, [player]),
