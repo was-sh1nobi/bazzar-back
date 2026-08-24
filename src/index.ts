@@ -9,6 +9,14 @@ import {getStats} from "./services/items/items";
 
 const app = Fastify({logger: true});
 
+// Normalize all errors (incl. FST_ERR_CTP_INVALID_JSON_BODY) to {success:false,message}
+app.setErrorHandler((error, req, res) => {
+    const status = (error as {statusCode?: number}).statusCode ?? 500;
+    const msg = error.message ?? "unexpected error";
+    // Fastify validation / JSON parse errors already have status 400
+    res.code(status).send({success: false, message: msg, code: (error as {code?: string}).code});
+});
+
 app.get('/', async (req, res) => {
     return {status: 200, message: 'Welcome to Fastify'};
 })
@@ -27,9 +35,10 @@ app.register(shopRoute , {prefix : "/shop"});
 
 const start = async () => {
     try {
-        const port = process.env.PORT || 3000;
-        await app.listen({port : Number(process.env.PORT || 3000)});
-        console.log(`🚀 We are up on port ${port}`);
+        const port = Number(process.env.PORT || 3000);
+        const host = process.env.HOST || "0.0.0.0";
+        await app.listen({port, host});
+        console.log(`🚀 We are up on ${host}:${port}`);
     } catch (e) {
         app.log.error(e);
         process.exit(1);
