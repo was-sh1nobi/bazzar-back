@@ -38,10 +38,21 @@ db.exec(`
         created_at INTEGER DEFAULT (unixepoch())
     );
 
+    -- Website accounts are intentionally SEPARATE from Minecraft players:
+    -- no UUID, no balance, and the plugin never touches this table.
+    CREATE TABLE IF NOT EXISTS web_users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'member',
+        created_at INTEGER DEFAULT (unixepoch())
+    );
+
     CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
     CREATE INDEX IF NOT EXISTS idx_items_seller ON items(seller);
     CREATE INDEX IF NOT EXISTS idx_history_buyer ON history(buyer);
     CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+    CREATE INDEX IF NOT EXISTS idx_web_users_username ON web_users(username);
 `);
 
 // --- Migration: legacy users(username PK) -> users(playeruuid PK) ---
@@ -74,6 +85,16 @@ try {
     const colNames = new Set(((db.query(`PRAGMA table_info(users)`).all() as {name: string}[]).map(c => c.name)));
     if (!colNames.has("password_hash")) db.exec(`ALTER TABLE users ADD COLUMN password_hash TEXT;`);
     if (!colNames.has("created_at")) db.exec(`ALTER TABLE users ADD COLUMN created_at INTEGER DEFAULT (unixepoch());`);
+    if (!colNames.has("banned")) db.exec(`ALTER TABLE users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0;`);
+    // Legacy cleanup: roles moved to the separate web_users table; revert users to its original schema
+    if (colNames.has("role")) {
+        try {
+            db.exec(`ALTER TABLE users DROP COLUMN role;`);
+            console.log("[db] dropped legacy users.role column (roles now live in web_users)");
+        } catch (e) {
+            console.error("[db] could not drop legacy users.role column", e);
+        }
+    }
 } catch (e) {
     console.error("[db] migration check failed", e);
 }

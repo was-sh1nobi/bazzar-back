@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>MC players · Bazzar</title>
+<link rel="stylesheet" href="/ui/assets/styles.css"/>
+</head>
+<body class="dash-body">
+<header class="topbar" id="topbar"></header>
+<main class="dash">
+    <h2>Minecraft players</h2>
+    <p class="page-sub">Registered players — ban or unban them from the marketplace.</p>
+    <section class="table-card">
+        <div class="toolbar">
+            <input id="search" type="search" placeholder="Search username…" aria-label="Search username"/>
+            <label class="dim" style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+                <input type="checkbox" id="banned-only" style="width:auto;cursor:pointer;"/> Banned only
+            </label>
+            <span class="count" id="count"></span>
+        </div>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                <tr><th>Player</th><th>UUID</th><th>Balance</th><th>Status</th><th>Joined</th><th>Action</th></tr>
+                </thead>
+                <tbody id="rows"><tr class="empty-row"><td colspan="6">Loading…</td></tr></tbody>
+            </table>
+        </div>
+    </section>
+</main>
+<script src="/ui/assets/shared.js"></script>
+<script src="/ui/assets/players.js"></script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Sign in · Bazzar</title>
+<link rel="stylesheet" href="/ui/assets/styles.css"/>
+</head>
+<body class="auth-body">
+<main class="card" role="main">
+    <div class="brand" aria-hidden="true">
+        <svg class="brand-mark" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9Z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg>
+        <span class="brand-name">BAZZAR</span>
+    </div>
+    <h1>Admin sign in</h1>
+    <p class="subtitle">Dashboard access is restricted to owners &amp; admins.</p>
+
+    <div id="alert" class="alert" role="alert" aria-live="polite"></div>
+
+    <form id="login-form" novalidate>
+        <div class="field">
+            <label for="username">Username</label>
+            <input id="username" name="username" type="text" autocomplete="username" placeholder="steve" required/>
+        </div>
+        <div class="field">
+            <label for="password">Password</label>
+            <div class="input-wrap">
+                <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required/>
+                <button type="button" class="toggle-pass" aria-label="Show password" data-target="password">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+            </div>
+        </div>
+        <button class="btn" id="submit" type="submit">
+            <span class="spinner" aria-hidden="true"></span>
+            <span class="btn-label">Sign in</span>
+        </button>
+    </form>
+
+    <p class="footnote">Need an account? <a href="/ui/signup">Sign up</a></p>
+</main>
+<script src="/ui/assets/login.js"></script>
+</body>
+</html>

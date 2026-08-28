@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Player · Bazzar</title>
+<link rel="stylesheet" href="/ui/assets/styles.css"/>
+</head>
+<body class="dash-body">
+<header class="topbar" id="topbar"></header>
+<main class="dash">
+    <a class="nav-link" href="/ui/players" style="display:inline-flex;margin-bottom:16px;">‹ All players</a>
+    <div class="profile-head" id="profile"><span class="dim">Loading…</span></div>
+
+    <section class="table-card">
+        <div class="table-head"><h3>Listings</h3><span class="dim" id="listings-count"></span></div>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                <tr><th>ID</th><th>Material</th><th>Amount</th><th>Price</th><th>Status</th><th>Origin</th><th>Source</th></tr>
+                </thead>
+                <tbody id="listings-rows"><tr class="empty-row"><td colspan="7">Loading…</td></tr></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="table-card section-gap">
+        <div class="table-head"><h3>History (bought &amp; sold)</h3><span class="dim" id="history-count"></span></div>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                <tr><th>ID</th><th>Seller</th><th>Buyer</th><th>Material</th><th>Amount</th><th>Price</th><th>Origin</th></tr>
+                </thead>
+                <tbody id="history-rows"><tr class="empty-row"><td colspan="7">Loading…</td></tr></tbody>
+            </table>
+        </div>
+    </section>
+</main>
+<script src="/ui/assets/shared.js"></script>
+<script src="/ui/assets/player.js"></script>
+</body>
+</html>

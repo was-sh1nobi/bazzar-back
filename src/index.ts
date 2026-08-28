@@ -4,6 +4,8 @@ import auctionRoute from "./routes/auction";
 import balanceRoute from "./routes/balance";
 import authRoute from "./routes/auth";
 import shopRoute from "./routes/shop";
+import uiRoute from "./routes/ui";
+import {registerBanGuard} from "./plugins/banGuard";
 import {getStats} from "./services/items/items";
 
 
@@ -16,6 +18,9 @@ app.setErrorHandler((error, req, res) => {
     // Fastify validation / JSON parse errors already have status 400
     res.code(status).send({success: false, message: msg, code: (error as {code?: string}).code});
 });
+
+// Ban guard: runs before every route/handler — banned players never reach any endpoint
+registerBanGuard(app);
 
 app.get('/', async (req, res) => {
     return {status: 200, message: 'Welcome to Fastify'};
@@ -32,6 +37,7 @@ app.register(auctionRoute);
 app.register(balanceRoute , {prefix : "/balance"});
 app.register(authRoute , {prefix : "/auth"});
 app.register(shopRoute , {prefix : "/shop"});
+app.register(uiRoute , {prefix : "/ui"});
 
 const start = async () => {
     try {

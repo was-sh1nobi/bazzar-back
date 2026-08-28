@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Total listings · Bazzar</title>
+<link rel="stylesheet" href="/ui/assets/styles.css"/>
+</head>
+<body class="dash-body" data-mode="all">
+<header class="topbar" id="topbar"></header>
+<main class="dash">
+    <h2>Total listings</h2>
+    <p class="page-sub">Every listing ever created — active, pending, sold or removed.</p>
+    <section class="table-card">
+        <div class="toolbar">
+            <input id="search" type="search" placeholder="Filter by seller…" aria-label="Filter by seller"/>
+            <span class="count" id="count"></span>
+        </div>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                <tr><th>ID</th><th>Seller</th><th>Material</th><th>Amount</th><th>Price</th><th>Status</th><th>Origin</th><th>Source</th></tr>
+                </thead>
+                <tbody id="rows"><tr class="empty-row"><td colspan="8">Loading…</td></tr></tbody>
+            </table>
+        </div>
+        <div class="pager">
+            <button class="icon-btn" id="prev" type="button">‹ Prev</button>
+            <span id="pageinfo">–</span>
+            <button class="icon-btn" id="next" type="button">Next ›</button>
+        </div>
+    </section>
+</main>
+<script src="/ui/assets/shared.js"></script>
+<script src="/ui/assets/table.js"></script>
+</body>
+</html>
