@@ -1,4 +1,5 @@
 import {createHmac, timingSafeEqual, randomUUID} from "crypto";
+import {isProduction} from "./config";
 
 /**
  * Minimal HS256 JWT implementation (sign + verify) built on node:crypto.
@@ -18,11 +19,15 @@ export type JwtPayload = {
 
 const getSecret = (): string => {
     let secret = process.env.JWT_SECRET;
-    if (!secret || secret.length < 16) {
+    if (!secret || secret.length < 32) {
+        if (isProduction) {
+            // Fail fast rather than silently signing sessions with a weak key.
+            throw new Error("[jwt] JWT_SECRET must be set to at least 32 characters in production (openssl rand -hex 32)");
+        }
         // Fall back to an ephemeral secret so dev servers still boot;
         // sessions simply reset on restart. Set JWT_SECRET in production.
         console.warn("[jwt] JWT_SECRET missing/short — using an ephemeral random secret (sessions will not survive restarts)");
-        secret = randomUUID() + randomUUID();
+        secret = randomUUID() + randomUUID() + randomUUID();
         process.env.JWT_SECRET = secret;
     }
     return secret;

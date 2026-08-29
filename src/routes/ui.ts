@@ -3,6 +3,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { signJwt, verifyJwt, JwtPayload } from "../utils/jwt";
 import { createWebUser, getWebUserByUsername, isPrivileged, listWebUsers, UiRole } from "../services/auth/ui";
+import { deletePlayerData } from "../services/auth/auth";
 import { pool } from "../db";
 import { isUuid, setBanned, listBanned } from "../services/ban/ban";
 
@@ -61,8 +62,8 @@ const getSession = (req: FastifyRequest): JwtPayload | null => {
     return verifyJwt(token);
 };
 
-const sessionCookie = (token: string) =>
-    `${COOKIE_NAME}=${token}; HttpOnly; Path=/ui; SameSite=Lax; Max-Age=${COOKIE_TTL}`;
+const sessionCookie = (token: string, secure = false) =>
+    `${COOKIE_NAME}=${token}; HttpOnly; Path=/ui; SameSite=Lax; Max-Age=${COOKIE_TTL}${secure ? "; Secure" : ""}`;
 
 const clearedCookie = () => `${COOKIE_NAME}=; HttpOnly; Path=/ui; SameSite=Lax; Max-Age=0`;
 
@@ -77,6 +78,23 @@ const requirePrivilegedApi = (req: FastifyRequest, res: FastifyReply): JwtPayloa
 const USERNAME_RE = /^[A-Za-z0-9_]{3,16}$/;
 
 export default async function uiRoute(app: FastifyInstance) {
+    // CSRF hardening: cookie-authenticated mutations under /ui/api/* must
+    // originate from our own host. Requests without an Origin header (curl,
+    // the MC plugin, tests) are unaffected; browsers always send Origin on
+    // cross-site POST/DELETE, which is exactly what we block.
+    app.addHook("onRequest", async (req, res) => {
+        if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method.toUpperCase())) return;
+        const path = (req.raw.url ?? req.url).split("?")[0];
+        if (!path.startsWith("/ui/api/")) return;
+        const origin = req.headers.origin;
+        if (!origin) return;
+        try {
+            if (new URL(origin).host !== req.headers.host) return fail(res, 403, "cross-origin request blocked");
+        } catch {
+            return fail(res, 403, "cross-origin request blocked");
+        }
+    });
+
     // ---------------- pages ----------------
 
     // GET /ui -> smart redirect (dashboard when already signed in, login otherwise)
@@ -155,9 +173,12 @@ export default async function uiRoute(app: FastifyInstance) {
         }
 
         clearFail(rateKey);
+        // Mark the cookie Secure when serving over TLS (directly or via a proxy
+        // that sets X-Forwarded-Proto), so the session is never sent over http.
+        const secure = String(req.headers["x-forwarded-proto"] ?? "").includes("https") || req.protocol === "https";
         const token = signJwt({sub: String(user.id), username: user.username, role: user.role as UiRole}, COOKIE_TTL);
         return res.code(200)
-            .header("set-cookie", sessionCookie(token))
+            .header("set-cookie", sessionCookie(token, secure))
             .send({success: true, message: "authenticated", username: user.username, role: user.role});
     });
 
@@ -234,7 +255,7 @@ export default async function uiRoute(app: FastifyInstance) {
         const status = (q.status ?? "").toUpperCase();
         const conditions: string[] = [];
         const params: unknown[] = [];
-        if (["AVAILABLE", "PENDING", "SOLD", "REMOVED"].includes(status)) conditions.push(`status = '${status}'`);
+        if (["AVAILABLE", "PENDING", "SOLD", "REMOVED"].includes(status)) { params.push(status); conditions.push(`status = $${params.length}`); }
         const seller = (q.seller ?? "").trim().replace(/[%_\\]/g, "");
         if (seller) { params.push(`%${seller}%`); conditions.push(`seller LIKE $${params.length}`); }
         const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -326,5 +347,28 @@ export default async function uiRoute(app: FastifyInstance) {
     app.get("/api/bans", async (req, res) => {
         if (!requirePrivilegedApi(req, res)) return;
         return res.code(200).send({bans: listBanned()});
+    });
+
+    // DELETE /ui/api/players/:uuid - permanently delete a Minecraft player,
+    // their balance and all of their listings (purchase history is kept).
+    app.delete("/api/players/:uuid", async (req, res) => {
+        if (!requirePrivilegedApi(req, res)) return;
+        const uuid = decodeURIComponent((req.params as {uuid: string}).uuid).toLowerCase();
+        if (!isUuid(uuid)) return fail(res, 400, "player must be identified by uuid");
+
+        const row = pool.query(
+            `SELECT playeruuid, username FROM users WHERE playeruuid = $1 LIMIT 1`,
+            [uuid]
+        ).rows[0] as {playeruuid: string; username: string} | undefined;
+        if (!row) return fail(res, 404, "player not found");
+
+        const {removedItems} = deletePlayerData(row.playeruuid, row.username);
+        return res.code(200).send({
+            success: true,
+            message: `player ${row.username} deleted`,
+            playeruuid: row.playeruuid,
+            username: row.username,
+            removedItems,
+        });
     });
 }

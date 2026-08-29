@@ -362,3 +362,81 @@ describe("marketplace management & ban guard", () => {
         return app2.inject({method: "GET", url, headers: {cookie: cookie2}});
     }
 });
+
+describe("DELETE /ui/api/players/:uuid", () => {
+    const app3 = Fastify();
+    const DEL_UUID = "dddddddd-1111-4222-8333-444444444444";
+    let cookie3 = "";
+
+    beforeAll(async () => {
+        app3.register(uiRoute, {prefix: "/ui"});
+        await app3.ready();
+
+        // MC player + one listing to be deleted
+        db.query(
+            `INSERT OR IGNORE INTO users (playeruuid, username, balance) VALUES ($1, 'DelTest', 42)`
+        ).run(DEL_UUID);
+        db.query(
+            `INSERT INTO items (seller, material, amount, price, source, origin, status)
+             VALUES ('DelTest', 'EMERALD', 3, '90', 'player', 'survival', 'AVAILABLE')`
+        ).run();
+
+        // owner session (OWNER was promoted by the earlier describe block)
+        const login = await app3.inject({
+            method: "POST", url: "/ui/api/login",
+            payload: {username: OWNER, password: PASSWORD},
+        });
+        expect(login.statusCode).toBe(200);
+        cookie3 = firstCookie(login).split(";")[0];
+    });
+
+    afterAll(async () => {
+        await app3.close();
+        db.query(`DELETE FROM items WHERE seller = 'DelTest'`).run();
+        db.query(`DELETE FROM users WHERE username = 'DelTest'`).run();
+    });
+
+    it("requires authentication", async () => {
+        const res = await app3.inject({method: "DELETE", url: `/ui/api/players/${DEL_UUID}`});
+        expect(res.statusCode).toBe(401);
+    });
+
+    it("rejects a malformed uuid", async () => {
+        const res = await app3.inject({
+            method: "DELETE", url: "/ui/api/players/not-a-uuid", headers: {cookie: cookie3},
+        });
+        expect(res.statusCode).toBe(400);
+    });
+
+    it("returns 404 for an unknown player", async () => {
+        const res = await app3.inject({
+            method: "DELETE",
+            url: "/ui/api/players/99999999-9999-4999-8999-999999999999",
+            headers: {cookie: cookie3},
+        });
+        expect(res.statusCode).toBe(404);
+    });
+
+    it("deletes the player and their listings", async () => {
+        const res = await app3.inject({
+            method: "DELETE", url: `/ui/api/players/${DEL_UUID}`, headers: {cookie: cookie3},
+        });
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.body);
+        expect(body.success).toBe(true);
+        expect(body.username).toBe("DelTest");
+        expect(body.removedItems).toBe(1);
+
+        const userRow = db.query(`SELECT COUNT(*) AS c FROM users WHERE playeruuid = $1`).get(DEL_UUID) as {c: number};
+        expect(userRow.c).toBe(0);
+        const itemRow = db.query(`SELECT COUNT(*) AS c FROM items WHERE seller = 'DelTest'`).get() as {c: number};
+        expect(itemRow.c).toBe(0);
+    });
+
+    it("returns 404 when deleting an already-deleted player", async () => {
+        const res = await app3.inject({
+            method: "DELETE", url: `/ui/api/players/${DEL_UUID}`, headers: {cookie: cookie3},
+        });
+        expect(res.statusCode).toBe(404);
+    });
+});

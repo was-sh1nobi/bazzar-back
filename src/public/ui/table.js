@@ -11,8 +11,8 @@
         const tbody = document.getElementById("rows");
         if (mode === "sold") {
             tbody.innerHTML = rows.length
-                ? rows.map((r) => `
-                    <tr>
+                ? rows.map((r, i) => `
+                    <tr style="--i:${i}">
                         <td class="mono dim">${r.id}</td>
                         <td class="mono"><a class="row-link" href="/ui/players/${encodeURIComponent(r.seller)}">${esc(r.seller)}</a></td>
                         <td class="mono"><a class="row-link" href="/ui/players/${encodeURIComponent(r.buyer)}">${esc(r.buyer)}</a></td>
@@ -24,8 +24,8 @@
                 : `<tr class="empty-row"><td colspan="7">No sales recorded yet.</td></tr>`;
         } else {
             tbody.innerHTML = rows.length
-                ? rows.map((r) => `
-                    <tr>
+                ? rows.map((r, i) => `
+                    <tr style="--i:${i}">
                         <td class="mono dim">${r.id}</td>
                         <td class="mono"><a class="row-link" href="/ui/players/${encodeURIComponent(r.seller)}">${esc(r.seller)}</a></td>
                         <td class="mono">${esc(r.material)}</td>

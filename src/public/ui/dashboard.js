@@ -10,6 +10,26 @@
 
     const redirectToLogin = () => { location.href = "/ui/login"; };
 
+    /** Eased count-up micro-animation for the dashboard stat cards. */
+    const countUp = (el, target) => {
+        if (prefersReducedMotion() || !Number.isFinite(target)) {
+            el.textContent = fmt.format(target ?? 0);
+            return;
+        }
+        const duration = 700;
+        const start = performance.now();
+        const step = (now) => {
+            const k = Math.min(1, (now - start) / duration);
+            const eased = 1 - Math.pow(1 - k, 3);
+            el.textContent = fmt.format(Math.round(target * eased));
+            if (k < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+    };
+
+    const prefersReducedMotion = () =>
+        window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
     const load = async () => {
         // 1. Session identity — bounce to login if the cookie is gone/expired
         let me;
@@ -38,15 +58,15 @@
             const s = await statsRes.json();
             for (const key of ["totalListings", "activeListings", "totalSold", "totalUsers", "totalPlayers"]) {
                 const el = document.getElementById(key);
-                if (el) el.textContent = fmt.format(s[key] ?? 0);
+                if (el) countUp(el, s[key] ?? 0);
             }
         }
 
         if (usersRes.ok) {
             const {users} = await usersRes.json();
             tbody.innerHTML = users.length
-                ? users.map((u) => `
-                    <tr>
+                ? users.map((u, i) => `
+                    <tr style="--i:${i}">
                         <td class="mono dim">${esc(u.id)}</td>
                         <td class="mono">${esc(u.username)}</td>
                         <td><span class="badge ${esc(u.role)}">${esc(u.role)}</span></td>

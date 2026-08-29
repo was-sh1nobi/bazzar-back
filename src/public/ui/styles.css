@@ -358,3 +358,136 @@ td .dim, .dim { color: var(--fg-dim); }
 .profile-head .profile-uuid { color: var(--fg-dim); font: 500 12px var(--font-mono); word-break: break-all; }
 .profile-head .profile-meta { display: flex; gap: 16px; flex-wrap: wrap; color: var(--fg-dim); font-size: 13px; }
 .section-gap { margin-top: 28px; }
+
+/* ============================ Motion & micro-interactions ============================ */
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes rowIn  { from { opacity: 0; transform: translateY(6px); }  to { opacity: 1; transform: none; } }
+@keyframes popIn  { from { opacity: 0; transform: scale(0.96); }      to { opacity: 1; transform: scale(1); } }
+@keyframes fadeIn   { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut  { from { opacity: 1; } to { opacity: 0; } }
+@keyframes bannedPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
+    50%      { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+}
+@keyframes gemFloat {
+    0%, 100% { transform: translateY(0); filter: drop-shadow(0 0 10px rgba(34, 197, 94, 0.45)); }
+    50%      { transform: translateY(-2px); filter: drop-shadow(0 0 14px rgba(34, 197, 94, 0.6)); }
+}
+
+/* Page entrance: sections cascade in */
+main.dash > * { animation: fadeUp 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+main.dash > :nth-child(2) { animation-delay: 70ms; }
+main.dash > :nth-child(3) { animation-delay: 140ms; }
+.auth-body .card { animation: popIn 440ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.denied-card { animation: popIn 440ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+
+/* Staggered table-row reveal (rows set --i via JS) */
+tbody tr {
+    animation: rowIn 300ms ease backwards;
+    animation-delay: calc(var(--i, 0) * 28ms);
+}
+
+/* Stat cards cascade + lift on hover */
+.stat-card { animation: fadeUp 440ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.stat-grid .stat-card:nth-child(1) { animation-delay: 60ms; }
+.stat-grid .stat-card:nth-child(2) { animation-delay: 120ms; }
+.stat-grid .stat-card:nth-child(3) { animation-delay: 180ms; }
+.stat-grid .stat-card:nth-child(4) { animation-delay: 240ms; }
+.stat-grid .stat-card:nth-child(5) { animation-delay: 300ms; }
+.stat-grid .stat-card:nth-child(6) { animation-delay: 360ms; }
+.stat-card:hover { box-shadow: 0 8px 24px rgba(34, 197, 94, 0.08); }
+
+/* Button micro-interactions: lift on hover, press on click */
+.btn { transition: filter var(--transition), transform var(--transition); }
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(1px) scale(0.98); }
+.icon-btn {
+    transition: color var(--transition), border-color var(--transition),
+                transform var(--transition), background var(--transition);
+}
+.icon-btn:hover { transform: translateY(-1px); }
+.icon-btn:active { transform: translateY(0) scale(0.96); }
+.icon-btn.danger:hover { background: var(--danger-soft); }
+.icon-btn[disabled] { opacity: 0.55; cursor: not-allowed; transform: none !important; }
+
+/* Status badges: banned pulses gently, available glows once on entry */
+.badge.banned { animation: bannedPulse 2.2s ease-in-out infinite; }
+.badge.available { animation: popIn 300ms ease backwards; }
+
+/* Topbar brand: gentle floating gem */
+.topbar .brand-mark { animation: gemFloat 3.4s ease-in-out infinite; }
+
+/* Nav links: soft background slide */
+.nav-link { transition: color var(--transition), background var(--transition), transform var(--transition); }
+.nav-link:active { transform: scale(0.96); }
+
+/* Toolbar search: grows slightly on focus */
+.toolbar input { transition: border-color var(--transition), box-shadow var(--transition), min-width 220ms ease; }
+.toolbar input:focus { min-width: 260px; }
+
+/* Row action buttons sit side by side */
+.actions-cell { display: flex; gap: 8px; align-items: center; }
+.actions-cell .icon-btn { padding: 6px 11px; font-size: 12.5px; }
+
+/* ---- Toasts ---- */
+#toast-root {
+    position: fixed;
+    bottom: 22px;
+    right: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 100;
+    pointer-events: none;
+}
+.toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--fg);
+    font: 500 13px var(--font-body);
+    padding: 12px 16px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    transform: translateX(24px);
+    transition: opacity 260ms cubic-bezier(0.22, 1, 0.36, 1), transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    max-width: 340px;
+}
+.toast.in  { opacity: 1; transform: none; }
+.toast.out { opacity: 0; transform: translateX(24px); }
+.toast.success { border-color: rgba(34, 197, 94, 0.5); }
+.toast.error   { border-color: rgba(239, 68, 68, 0.5); }
+
+/* ---- Confirm modal ---- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.7);
+    backdrop-filter: blur(4px);
+    display: grid;
+    place-items: center;
+    z-index: 90;
+    animation: fadeIn 180ms ease;
+}
+.modal-overlay.closing { animation: fadeOut 200ms ease forwards; }
+.modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 26px;
+    max-width: 430px;
+    width: calc(100% - 40px);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    animation: popIn 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.modal h3 { font-size: 16px; margin-bottom: 10px; }
+.modal p { color: var(--fg-dim); font-size: 13.5px; line-height: 1.6; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.modal-actions .icon-btn { padding: 9px 16px; }
+
+/* Motion accessibility: everything above collapses to near-instant */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    tbody tr { animation: none !important; animation-delay: 0ms !important; }
+}
