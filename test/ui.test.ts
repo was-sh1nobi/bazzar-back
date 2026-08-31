@@ -5,6 +5,7 @@ import itemsRoute from "../src/routes/items";
 import balanceRoute from "../src/routes/balance";
 import {registerBanGuard} from "../src/plugins/banGuard";
 import {setBanned} from "../src/services/ban/ban";
+import {seedShopItemsIfNeeded} from "../src/services/shop/catalog";
 import {db} from "../src/db";
 import {signJwt} from "../src/utils/jwt";
 
@@ -230,6 +231,9 @@ describe("marketplace management & ban guard", () => {
     let cookie2 = "";
 
     beforeAll(async () => {
+        // Ensure shop table is populated regardless of test execution order
+        seedShopItemsIfNeeded();
+
         // Ban guard registered FIRST, before any route — mirrors index.ts
         registerBanGuard(app2);
         app2.register(itemsRoute, {prefix: "/items"});
