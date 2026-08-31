@@ -72,11 +72,9 @@ describe("auction API", () => {
 
     it("buys the item and records it in bought/history", async () => {
         const alex = "11111111-2222-3333-4444-555555555555";
-        await app.inject({
-            method: "POST",
-            url: "/balance/change",
-            payload: {playerUuid: alex, playerName: "Alex", delta: 10000},
-        });
+        // Balance writes are private now — seed directly via DB instead of POST /balance/change
+        const {pool} = await import("../src/db");
+        pool.query(`INSERT INTO users (playeruuid, username, balance) VALUES ($1,$2,$3) ON CONFLICT(playeruuid) DO UPDATE SET balance = $3`, [alex, "Alex", 10000]);
 
         const feed = await app.inject({method: "GET", url: "/items?page=0&pageSize=45"});
         const id = JSON.parse(feed.body).items[0].id;

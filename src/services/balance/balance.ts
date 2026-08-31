@@ -30,11 +30,24 @@ export const setBalance = async (playerUuid: string, balance: number) => {
 };
 
 export const changeBalance = async (playerUuid: string, delta: number): Promise<number> => {
-    const current = await getBalance(playerUuid);
-    const next = current + delta;
-    if (next < 0) throw new Error("insufficient funds");
-    pool.query(`UPDATE users SET balance = $1 WHERE playeruuid = $2`, [next, playerUuid]);
-    return next;
+    await registerIfAbsentByUuid(playerUuid);
+    // atomic: only succeed if resulting balance >=0
+    const res = pool.query(
+        `UPDATE users SET balance = balance + $1 WHERE playeruuid = $2 AND balance + $1 >= 0 RETURNING balance`,
+        [delta, playerUuid]
+    );
+    if (res.rows.length === 0) {
+        // distinguish insufficient funds vs missing user (should not happen after register)
+        const cur = await getBalance(playerUuid);
+        if (cur + delta < 0) throw new Error("insufficient funds");
+        throw new Error("balance update failed");
+    }
+    return Number(res.rows[0].balance);
+};
+
+export const deductBalanceAtomic = async (playerUuid: string, cost: number): Promise<number> => {
+    if (cost <= 0) throw new Error("invalid cost");
+    return changeBalance(playerUuid, -cost);
 };
 
 export const creditIfRegistered = async (sellerName: string, amount: number) => {

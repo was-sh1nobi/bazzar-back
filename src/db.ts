@@ -48,11 +48,34 @@ db.exec(`
         created_at INTEGER DEFAULT (unixepoch())
     );
 
+    CREATE TABLE IF NOT EXISTS shop_items (
+        id TEXT PRIMARY KEY,
+        material TEXT NOT NULL UNIQUE,
+        category TEXT NOT NULL,
+        buy REAL NOT NULL CHECK(buy >= 0),
+        sell REAL NOT NULL CHECK(sell >= 0)
+    );
+
+    CREATE TABLE IF NOT EXISTS shop_purchases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        playeruuid TEXT NOT NULL,
+        itemId TEXT NOT NULL,
+        material TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        priceEach REAL NOT NULL,
+        totalCost REAL NOT NULL,
+        created_at INTEGER DEFAULT (unixepoch()),
+        FOREIGN KEY(playeruuid) REFERENCES users(playeruuid)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
     CREATE INDEX IF NOT EXISTS idx_items_seller ON items(seller);
     CREATE INDEX IF NOT EXISTS idx_history_buyer ON history(buyer);
     CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
     CREATE INDEX IF NOT EXISTS idx_web_users_username ON web_users(username);
+    CREATE INDEX IF NOT EXISTS idx_shop_material ON shop_items(material);
+    CREATE INDEX IF NOT EXISTS idx_shop_category ON shop_items(category);
+    CREATE INDEX IF NOT EXISTS idx_shop_purchases_player ON shop_purchases(playeruuid);
 `);
 
 // --- Migration: legacy users(username PK) -> users(playeruuid PK) ---

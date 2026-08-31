@@ -6,6 +6,7 @@ import { createWebUser, getWebUserByUsername, isPrivileged, listWebUsers, UiRole
 import { deletePlayerData } from "../services/auth/auth";
 import { pool } from "../db";
 import { isUuid, setBanned, listBanned } from "../services/ban/ban";
+import { updateShopItemPrices } from "../services/shop/catalog";
 
 const PUBLIC_DIR = join(__dirname, "../public/ui");
 const COOKIE_NAME = "bazzar_ui_session";
@@ -209,6 +210,8 @@ export default async function uiRoute(app: FastifyInstance) {
                 (SELECT COUNT(*) FROM history) AS totalSold,
                 (SELECT COUNT(*) FROM web_users) AS totalUsers,
                 (SELECT COUNT(*) FROM users) AS totalPlayers,
+                (SELECT COUNT(*) FROM shop_items) AS totalShopItems,
+                (SELECT COUNT(*) FROM shop_purchases) AS totalShopPurchases,
                 (SELECT COALESCE(SUM(balance), 0) FROM users) AS totalBalance`
         ).rows[0] as Record<string, string>;
         return res.code(200).send({
@@ -217,6 +220,8 @@ export default async function uiRoute(app: FastifyInstance) {
             totalSold: parseInt(row.totalSold, 10),
             totalUsers: parseInt(row.totalUsers, 10),
             totalPlayers: parseInt(row.totalPlayers, 10),
+            totalShopItems: parseInt(row.totalShopItems, 10),
+            totalShopPurchases: parseInt(row.totalShopPurchases, 10),
             totalBalance: parseFloat(row.totalBalance),
         });
     });
@@ -243,6 +248,12 @@ export default async function uiRoute(app: FastifyInstance) {
 
     // GET /ui/players/:player - one player's listings & history
     app.get("/players/:player", async (req, res) => servePage(res, "player.html"));
+
+    // GET /ui/shop      - server shop catalog & items view
+    app.get("/shop", async (req, res) => servePage(res, "shop.html"));
+
+    // GET /ui/purchases - server shop purchase log
+    app.get("/purchases", async (req, res) => servePage(res, "purchases.html"));
 
     // ---------------- api: marketplace management (owner/admin only) ----------------
 
@@ -370,5 +381,96 @@ export default async function uiRoute(app: FastifyInstance) {
             username: row.username,
             removedItems,
         });
+    });
+
+    // GET /ui/api/shop - paginated shop catalog with category & search filtering
+    app.get("/api/shop", async (req, res) => {
+        if (!requirePrivilegedApi(req, res)) return;
+        const q = req.query as {category?: string; search?: string; page?: string; pageSize?: string};
+        const page = Math.max(0, parseInt(q.page ?? "0", 10) || 0);
+        const pageSize = Math.min(100, Math.max(1, parseInt(q.pageSize ?? "30", 10) || 30));
+        const conditions: string[] = [];
+        const params: unknown[] = [];
+        if (q.category) {
+            params.push(q.category.toUpperCase());
+            conditions.push(`category = $${params.length}`);
+        }
+        if (q.search) {
+            params.push(`%${q.search.trim().replace(/[%_\\]/g, "")}%`);
+            conditions.push(`(id LIKE $${params.length} OR material LIKE $${params.length})`);
+        }
+        const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+        const countRow = pool.query(`SELECT COUNT(*) AS count FROM shop_items ${where}`, params).rows[0] as {count: string};
+        const total = parseInt(countRow.count, 10);
+        const items = pool.query(
+            `SELECT id, material, category, buy, sell FROM shop_items ${where} ORDER BY category, material LIMIT ${pageSize} OFFSET ${page * pageSize}`,
+            params
+        ).rows;
+        const categories = pool.query(`SELECT DISTINCT category FROM shop_items ORDER BY category`).rows.map(
+            (r: {category: string}) => r.category
+        );
+        return res.code(200).send({
+            items,
+            categories,
+            total,
+            page,
+            pageSize,
+            totalPages: Math.ceil(total / pageSize),
+            hasMore: (page + 1) * pageSize < total,
+        });
+    });
+
+    // PATCH /ui/api/shop/:id - update buy/sell price of a shop item
+    app.patch("/api/shop/:id", async (req, res) => {
+        if (!requirePrivilegedApi(req, res)) return;
+        const id = decodeURIComponent((req.params as {id: string}).id);
+        const body = (req.body ?? {}) as {buy?: number; sell?: number};
+        if (body.buy !== undefined && (!Number.isFinite(Number(body.buy)) || Number(body.buy) < 0)) {
+            return fail(res, 400, "buy price must be a positive number or 0");
+        }
+        if (body.sell !== undefined && (!Number.isFinite(Number(body.sell)) || Number(body.sell) < 0)) {
+            return fail(res, 400, "sell price must be a positive number or 0");
+        }
+        const buy = body.buy !== undefined ? Number(body.buy) : undefined;
+        const sell = body.sell !== undefined ? Number(body.sell) : undefined;
+        const updated = updateShopItemPrices(id, buy, sell);
+        if (!updated) return fail(res, 404, "shop item not found");
+        return res.code(200).send({success: true, item: updated});
+    });
+
+    // GET /ui/api/purchases?page=&pageSize=&player=&itemId= - shop purchase audit log
+    app.get("/api/purchases", async (req, res) => {
+        if (!requirePrivilegedApi(req, res)) return;
+        const q = req.query as {page?: string; pageSize?: string; player?: string; itemId?: string};
+        const page = Math.max(0, parseInt(q.page ?? "0", 10) || 0);
+        const pageSize = Math.min(100, Math.max(1, parseInt(q.pageSize ?? "25", 10) || 25));
+        const conditions: string[] = [];
+        const params: unknown[] = [];
+        if (q.player) {
+            const clean = q.player.trim().replace(/[%_\\]/g, "");
+            params.push(`%${clean}%`);
+            conditions.push(`(u.username LIKE $${params.length} OR sp.playeruuid LIKE $${params.length})`);
+        }
+        if (q.itemId) {
+            const clean = q.itemId.trim().replace(/[%_\\]/g, "");
+            params.push(`%${clean}%`);
+            conditions.push(`(sp.itemId LIKE $${params.length} OR sp.material LIKE $${params.length})`);
+        }
+        const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+        const countRow = pool.query(
+            `SELECT COUNT(*) AS count FROM shop_purchases sp LEFT JOIN users u ON sp.playeruuid = u.playeruuid ${where}`,
+            params
+        ).rows[0] as {count: string};
+        const total = parseInt(countRow.count, 10);
+        const purchases = pool.query(
+            `SELECT sp.id, sp.playeruuid, COALESCE(u.username, sp.playeruuid) as username,
+                    sp.itemId, sp.material, sp.amount, sp.priceEach, sp.totalCost, sp.created_at
+             FROM shop_purchases sp
+             LEFT JOIN users u ON sp.playeruuid = u.playeruuid
+             ${where}
+             ORDER BY sp.id DESC LIMIT ${pageSize} OFFSET ${page * pageSize}`,
+            params
+        ).rows;
+        return res.code(200).send({page, pageSize, total, totalPages: Math.ceil(total / pageSize), purchases});
     });
 }

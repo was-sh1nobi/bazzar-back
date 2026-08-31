@@ -28,10 +28,12 @@ const fail = (res: {code: (c: number) => {send: (b: unknown) => unknown}}, code:
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+const clampPageSize = (raw: unknown, fallback: number) => Math.min(100, Math.max(1, parsePage(raw, fallback)));
+
 export default async function itemsRoute(app: FastifyInstance) {
     app.get<{Querystring: ListQuery}>('/', async (req, res) => {
         const page = parsePage(req.query.page, 0);
-        const pageSize = parsePage(req.query.pageSize, 45);
+        const pageSize = clampPageSize(req.query.pageSize, 45);
         const player = req.query.player && UUID_RE.test(req.query.player) ? req.query.player : undefined;
         const data = await getItems(page, pageSize, player);
         res.code(200).send(data);
@@ -39,7 +41,7 @@ export default async function itemsRoute(app: FastifyInstance) {
 
     app.get<{Querystring: ListQuery}>('/poll', async (req, res) => {
         const page = parsePage(req.query.page, 0);
-        const pageSize = parsePage(req.query.pageSize, 45);
+        const pageSize = clampPageSize(req.query.pageSize, 45);
         const player = req.query.player && UUID_RE.test(req.query.player) ? req.query.player : undefined;
         const since = Number(req.query.since) || 0;
         const timeoutMs = Math.min(Math.max(Number(req.query.timeout) || 25, 1), 60) * 1000;
@@ -58,7 +60,7 @@ export default async function itemsRoute(app: FastifyInstance) {
         const player = req.query.player;
         if (!player) return fail(res, 400, "player query param is required");
         const page = parsePage(req.query.page, 0);
-        const pageSize = parsePage(req.query.pageSize, 45);
+        const pageSize = clampPageSize(req.query.pageSize, 45);
         const data = await getBySeller(player, page, pageSize);
         res.code(200).send(data);
     });
@@ -67,7 +69,7 @@ export default async function itemsRoute(app: FastifyInstance) {
         const player = req.query.player;
         if (!player) return fail(res, 400, "player query param is required");
         const page = parsePage(req.query.page, 0);
-        const pageSize = parsePage(req.query.pageSize, 45);
+        const pageSize = clampPageSize(req.query.pageSize, 45);
         const data = await getByBuyer(player, page, pageSize);
         res.code(200).send(data);
     });
@@ -76,15 +78,17 @@ export default async function itemsRoute(app: FastifyInstance) {
         const player = req.query.player;
         if (!player) return fail(res, 400, "player query param is required");
         const page = parsePage(req.query.page, 0);
-        const pageSize = parsePage(req.query.pageSize, 45);
+        const pageSize = clampPageSize(req.query.pageSize, 45);
         const data = await getHistory(player, page, pageSize);
         res.code(200).send(data);
     });
 
     app.post<{Body: ItemsAddBody}>('/add', async (req, res) => {
         const {playeruuid, playerName, material, amount, price, source, origin} = req.body;
-        registerIfAbsent(playerName, playeruuid);
+        await registerIfAbsent(playerName, playeruuid);
         if (price.length > 20) return fail(res, 400, "Price length cant go higher than 20");
+        const priceNum = Number(price.trim());
+        if (!Number.isFinite(priceNum) || priceNum <= 0) return fail(res, 400, "invalid price");
         if (/\s/.test(playerName.trim())) return fail(res, 400, "Player name cannot contain spaces");
         if (!materialRe.test(material.trim())) return fail(res, 400, "material must be uppercase");
         const amt = Number(amount.trim());

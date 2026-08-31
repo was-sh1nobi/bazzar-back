@@ -48,9 +48,14 @@ export const extractPlayerUuids = (req: {query?: Record<string, unknown>; body?:
     if (b && typeof b === "object") {
         const body = b as Record<string, unknown>;
         push(body.playerUuid);
+        push(body.playeruuid); // legacy lowercase key used by POST /items/add
         push(body.buyerId);
         push(body.sellerId);
         push(body.player);
+        // body may contain nested player object
+        if (body.player && typeof body.player === "object") {
+            push((body.player as Record<string, unknown>).playerUuid);
+        }
     }
     return out;
 };

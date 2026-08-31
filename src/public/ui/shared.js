@@ -38,6 +38,8 @@
             <a class="nav-link" href="/ui/active">Active</a>
             <a class="nav-link" href="/ui/sold">Sold</a>
             <a class="nav-link" href="/ui/players">Players</a>
+            <a class="nav-link" href="/ui/shop">Shop</a>
+            <a class="nav-link" href="/ui/purchases">Purchases</a>
         </nav>
         <div class="spacer"></div>
         <div class="user-chip">

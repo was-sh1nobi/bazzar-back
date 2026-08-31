@@ -238,10 +238,10 @@ describe("marketplace management & ban guard", () => {
         await app2.ready();
 
         // MC player + one listing
-        await app2.inject({
-            method: "POST", url: "/balance/change",
-            payload: {playerUuid: BANNED_UUID, playerName: "BanTest", delta: 500},
-        });
+        db.query(
+            `INSERT OR REPLACE INTO users (playeruuid, username, balance, banned)
+             VALUES ('${BANNED_UUID}', 'BanTest', 500, 0)`
+        ).run();
         db.query(
             `INSERT INTO items (seller, material, amount, price, source, origin, status)
              VALUES ('BanTest', 'DIAMOND', 2, '150', 'player', 'survival', 'AVAILABLE')`
@@ -351,11 +351,51 @@ describe("marketplace management & ban guard", () => {
     });
 
     it("serves all management pages to the owner", async () => {
-        for (const url of ["/ui/listings", "/ui/active", "/ui/sold", "/ui/players", "/ui/players/BanTest"]) {
+        for (const url of ["/ui/listings", "/ui/active", "/ui/sold", "/ui/players", "/ui/players/BanTest", "/ui/shop", "/ui/purchases"]) {
             const res = await get2(url);
             expect(res.statusCode).toBe(200);
             expect(res.headers["content-type"]).toContain("text/html");
         }
+    });
+
+    it("returns shop catalog and purchases API data with pagination", async () => {
+        const shopRes = await get2("/ui/api/shop?page=0&pageSize=10");
+        expect(shopRes.statusCode).toBe(200);
+        const shopBody = JSON.parse(shopRes.body);
+        expect(Array.isArray(shopBody.items)).toBe(true);
+        expect(shopBody.items.length).toBeLessThanOrEqual(10);
+        expect(Array.isArray(shopBody.categories)).toBe(true);
+        expect(shopBody).toHaveProperty("total");
+        expect(shopBody).toHaveProperty("hasMore");
+
+        const purchasesRes = await get2("/ui/api/purchases");
+        expect(purchasesRes.statusCode).toBe(200);
+        const purchasesBody = JSON.parse(purchasesRes.body);
+        expect(Array.isArray(purchasesBody.purchases)).toBe(true);
+        expect(purchasesBody).toHaveProperty("total");
+    });
+
+    it("updates shop item prices via PATCH /ui/api/shop/:id", async () => {
+        const patchRes = await app2.inject({
+            method: "PATCH",
+            url: "/ui/api/shop/stone",
+            headers: {cookie: cookie2},
+            payload: {buy: 12.5, sell: 4.5},
+        });
+        expect(patchRes.statusCode).toBe(200);
+        const body = JSON.parse(patchRes.body);
+        expect(body.success).toBe(true);
+        expect(body.item.buy).toBe(12.5);
+        expect(body.item.sell).toBe(4.5);
+
+        // invalid values rejected
+        const invalidRes = await app2.inject({
+            method: "PATCH",
+            url: "/ui/api/shop/stone",
+            headers: {cookie: cookie2},
+            payload: {buy: -5},
+        });
+        expect(invalidRes.statusCode).toBe(400);
     });
 
     function get2(url: string) {

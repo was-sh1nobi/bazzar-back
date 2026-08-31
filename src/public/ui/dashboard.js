@@ -56,7 +56,7 @@
 
         if (statsRes.ok) {
             const s = await statsRes.json();
-            for (const key of ["totalListings", "activeListings", "totalSold", "totalUsers", "totalPlayers"]) {
+            for (const key of ["totalListings", "activeListings", "totalSold", "totalUsers", "totalPlayers", "totalShopItems", "totalShopPurchases"]) {
                 const el = document.getElementById(key);
                 if (el) countUp(el, s[key] ?? 0);
             }

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Server Shop · Bazzar</title>
+<link rel="stylesheet" href="/ui/assets/styles.css"/>
+</head>
+<body class="dash-body">
+<header class="topbar" id="topbar"></header>
+<main class="dash">
+    <div class="dash-header-row">
+        <div>
+            <h2>Server Shop Catalog</h2>
+            <p class="page-sub">Official server item prices, buy/sell values, and categories.</p>
+        </div>
+    </div>
+    <section class="table-card">
+        <div class="toolbar">
+            <input id="search" type="search" placeholder="Search item or material…" aria-label="Search items"/>
+            <select id="category-filter" aria-label="Filter by category">
+                <option value="">All Categories</option>
+            </select>
+            <span class="count" id="count">Loading…</span>
+        </div>
+        <div class="shop-grid" id="shop-grid">
+            <div class="empty-state">Loading shop catalog…</div>
+        </div>
+        <div id="infinite-scroll-anchor" class="scroll-anchor">
+            <span class="anchor-spinner" id="anchor-spinner" style="display: none;"></span>
+            <span class="anchor-text" id="anchor-text"></span>
+        </div>
+    </section>
+</main>
+<script src="/ui/assets/shared.js"></script>
+<script src="/ui/assets/shop.js"></script>
+</body>
+</html>

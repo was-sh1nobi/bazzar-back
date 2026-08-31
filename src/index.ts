@@ -8,6 +8,7 @@ import uiRoute from "./routes/ui";
 import {registerBanGuard} from "./plugins/banGuard";
 import {registerRateLimit} from "./plugins/rateLimit";
 import {registerSecurityHeaders} from "./plugins/securityHeaders";
+import {registerPluginAuth} from "./plugins/pluginAuth";
 import {getStats} from "./services/items/items";
 import {intEnv, strEnv, boolEnv} from "./utils/config";
 
@@ -31,6 +32,8 @@ app.setErrorHandler((error, req, res) => {
 registerSecurityHeaders(app);
 // Global per-zone rate limiting: /ui/api/*, /ui/* and MC plugin endpoints
 registerRateLimit(app);
+// Plugin secret auth for mutating MC endpoints (prevents UUID spoofing C1)
+registerPluginAuth(app);
 // Ban guard: runs before every route/handler — banned players never reach any endpoint
 registerBanGuard(app);
 
