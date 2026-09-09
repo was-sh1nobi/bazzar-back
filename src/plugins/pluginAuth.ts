@@ -1,20 +1,29 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { strEnv, isProduction } from "../utils/config";
+import { strEnv, boolEnv, isProduction } from "../utils/config";
 
 /**
- * Plugin-to-backend authentication.
- * All mutating MC endpoints (shop buy/sell, auction list, items/*) require
- * header `x-plugin-secret` matching PLUGIN_SECRET env.
+ * Plugin-to-backend authentication (OPTIONAL, opt-in).
+ * When enforced, all mutating MC endpoints (shop buy/sell, auction list,
+ * items/*) require header `x-plugin-secret` matching PLUGIN_SECRET env.
  * Without it any curl can spoof any playerUuid (C1).
  *
- * - If PLUGIN_SECRET is not set: in production fail closed (503),
- *   in dev/test allow but warn (so local dev without secret works).
+ * Enforcement is controlled by REQUIRE_PLUGIN_SECRET (default "0" = off):
+ * - "0"/unset: secret is never checked — the plugin works without any
+ *   secret configured. Recommended only for trusted networks / dev.
+ * - "1"/"true": strict mode. If PLUGIN_SECRET is not set: in production
+ *   fail closed (503), in dev/test allow but warn. If set: a missing or
+ *   mismatched header is rejected with 401.
+ *
  * - GET /balance and GET /shop/catalog remain public (read-only).
  * - /ui/* is cookie-JWT authenticated separately, not checked here.
+ * - /auth/* is never checked here (login/signup must work secret-less).
  */
 const getSecret = () => strEnv("PLUGIN_SECRET");
 
+export const isPluginAuthEnforced = (): boolean => boolEnv("REQUIRE_PLUGIN_SECRET", false);
+
 export const requirePluginSecret = (req: FastifyRequest, res: FastifyReply): boolean => {
+    if (!isPluginAuthEnforced()) return true;
     const secret = getSecret();
     if (!secret) {
         if (isProduction) {
@@ -33,6 +42,10 @@ export const requirePluginSecret = (req: FastifyRequest, res: FastifyReply): boo
 };
 
 export const registerPluginAuth = (app: FastifyInstance) => {
+    if (!isPluginAuthEnforced()) {
+        app.log.warn("plugin secret auth is DISABLED (REQUIRE_PLUGIN_SECRET != 1) — mutating MC endpoints accept requests without x-plugin-secret");
+        return;
+    }
     // Only guard mutating MC routes; keep reads open.
     const guarded = new Set(["POST", "PUT", "PATCH", "DELETE"]);
     const guardedPrefixes = ["/shop/buy", "/shop/sell", "/list", "/items/add", "/items/buy", "/items/retrieve", "/shop/catalog/reload"];
